@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import torch
 from tensorboardX import SummaryWriter
 from torch.autograd import Variable
@@ -53,16 +54,36 @@ class CNN(torch.nn.Module):
 
 MODE_FILE_PATH = 'models/model.pkl'
 
-if __name__ == '__main__':
 
+def predict():
+    _, _, X_test_orig, Y_test_orig, _ = load_dataset()
+    X_test = X_test_orig / 255
+
+    try:
+        saved_models = torch.load('models/model.pkl')
+        model = saved_models['model']
+        global_step = saved_models['step']
+        print("after load global_step is {}".format(global_step))
+    except Exception as e:
+        global_step = 0
+        print('error {}'.format(e))
+    X_test = torch.from_numpy(X_test).transpose(1, 3)
+    y_pred = model(X_test).argmax(1).reshape((1, 120))
+    y_test = torch.from_numpy(Y_test_orig)
+    accu_cnt = y_pred.eq(y_test).sum()
+
+    print('accuracy is %.2f' % (accu_cnt.item()/120.0))
+
+
+def train():
     data_set = GestureDataSet('train')
     data_loader = DataLoader(data_set, batch_size=200)
 
-    writer = SummaryWriter(comment='-lre3')
+    writer = SummaryWriter()
 
     model = CNN().double()
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     try:
         saved_models = torch.load('models/model.pkl')
@@ -91,3 +112,14 @@ if __name__ == '__main__':
             print("before save global_step is {}".format(global_step))
             torch.save({'step': global_step, 'model': model}, MODE_FILE_PATH)
     torch.save({'step': global_step, 'model': model}, MODE_FILE_PATH)
+
+if __name__ == '__main__':
+
+    parse = argparse.ArgumentParser(description='train and predict gesture with CNN')
+    parse.add_argument('mode', type=str, help='train or predict')
+    args = parse.parse_args()
+    print(args.mode)
+    if args.mode == 'train':
+        train()
+    else:
+        predict()
